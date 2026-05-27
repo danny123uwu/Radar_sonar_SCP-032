@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Radar Sonar — Directo por USB</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0f0a; color: #00ff41; font-family: monospace; display: flex; flex-direction: column; height: 100vh; }
+
+  #header { background: #0d140d; padding: 10px; text-align: center; border-bottom: 2px solid #1a2e1a; }
+  #btn-conectar { background: #00ff41; color: #000; font-weight: bold; padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; }
+  #btn-conectar:hover { background: #00cc33; }
+
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #panel-radar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  canvas { border-radius: 50%; }
+
+  #panel-estado { width: 320px; background: #0d140d; border-left: 1px solid #1a2e1a; padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+
+  h2 { font-size: 13px; color: #4a7a4a; text-transform: uppercase; margin-bottom: 6px; }
+  .task-row { background: #111811; border: 1px solid #1f2f1f; border-radius: 6px; padding: 10px 12px; margin-top:8px;}
+  .task-name { font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+  .task-status { font-size: 11px; color: #5a8a5a; }
+  .task-note { font-size: 11px; color: #3a6a3a; margin-top: 2px; }
+
+  .ta { color: #ff4444; } .tr { color: #00ff41; } .tc { color: #ffaa00; } .tl { color: #888888; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 10px; margin-left: 6px; }
+  .libre { background: #0a2a0a; color: #00cc33; border: 1px solid #00cc33; }
+  .tomado { background: #2a1500; color: #ffaa00; border: 1px solid #ffaa00; }
+  .esperando { background: #2a0000; color: #ff4444; border: 1px solid #ff4444; }
+  .timeout { background: #1a0000; color: #cc0000; border: 1px solid #cc0000; }
+
+  #modo-btn { padding: 10px 16px; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 13px; width: 100%; }
+  .btn-normal { background: #0a2a0a; color: #00ff41; border: 1px solid #00ff41; }
+  .btn-inversion { background: #2a0000; color: #ff4444; border: 1px solid #ff4444; }
+
+  #dist-display { font-size: 28px; text-align: center; padding: 6px; }
+  #angulo-display { font-size: 13px; color: #4a7a4a; text-align: center; }
+  #dist-grande { font-size:22px; text-align:center; padding:4px; }
+  #log-box { font-size: 10px; color: #2a5a2a; height: 100px; overflow-y: auto; border: 1px solid #1a2e1a; padding: 6px; background: #080f08; }
+</style>
+</head>
+<body>
+
+<audio id="alarma-mp3" src="Music.mp3" loop preload="auto"></audio>
+
+<div id="header">
+  <button id="btn-conectar" onclick="conectarUSB()">🔌 CONECTAR AL ESP32 POR USB</button>
+  <span style="font-size: 12px; margin-left: 10px; color: #ffaa00;">(Recuerda cerrar el Monitor Serie de Arduino primero)</span>
+</div>
+
+<div id="main">
+  <div id="panel-radar">
+    <canvas id="radar" width="460" height="460"></canvas>
+    <div id="dist-display">-- cm</div>
+    <div id="angulo-display">Ángulo: --°</div>
+  </div>
+
+  <div id="panel-estado">
+    <div>
+      <h2>Estado del sistema</h2>
+      <div id="task-alerta" class="task-row">
+        <div class="task-name ta">TaskAlerta <span class="badge libre" id="badge-alerta">LIBRE</span></div>
+        <div class="task-status">Prioridad 3 — detecta objetos</div>
+        <div class="task-note" id="note-alerta">esperando...</div>
+      </div>
+      <div id="task-radar" class="task-row">
+        <div class="task-name tr">TaskRadar <span class="badge libre" id="badge-radar">LIBRE</span></div>
+        <div class="task-status">Prioridad 3 — barre servo</div>
+        <div class="task-note" id="note-radar">escaneando...</div>
+      </div>
+      <div id="task-calib" class="task-row">
+        <div class="task-name tc">TaskCalib <span class="badge libre" id="badge-calib">LIBRE</span></div>
+        <div class="task-status">Prioridad 1 — calibra servo</div>
+        <div class="task-note" id="note-calib">en espera...</div>
+      </div>
+      <div id="task-logger" class="task-row">
+        <div class="task-name tl">TaskLogger <span class="badge libre" id="badge-logger">LIBRE</span></div>
+        <div class="task-status">Prioridad 2 — escribe log</div>
+        <div class="task-note" id="note-logger">logging...</div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Modo de demostración</h2>
+      <button id="modo-btn" class="btn-normal" onclick="toggleModo()">Modo: NORMAL (con mutex)</button>
+    </div>
+
+    <div>
+      <h2>Distancia actual</h2>
+      <div id="dist-grande">-- cm</div>
+    </div>
+
+    <div>
+      <h2>Log de eventos</h2>
+      <div id="log-box"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let port, outputStream;
+let modoInversion = false;
+
+// ── LECTURA POR CABLE USB OPTIMIZADA (SISTEMA INMUNE A CONGELAMIENTOS) ──
+async function conectarUSB() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    outputStream = port.writable;
+    document.getElementById("btn-conectar").textContent = "✅ CONECTADO AL RADAR";
+    document.getElementById("btn-conectar").style.background = "#005500";
+    document.getElementById("btn-conectar").style.color = "#00ff41";
+
+    // Modificación técnica estable utilizando el lector directo nativo del puerto
+    const reader = port.readable.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        reader.releaseLock();
+        break;
+      }
+      
+      // Decodifica los fragmentos entrantes de forma continua y segura
+      buffer += decoder.decode(value, { stream: true });
+      let lines = buffer.split('\n');
+      buffer = lines.pop(); 
+      
+      for (let line of lines) {
+        if(line.trim() !== "") procesarDatos(line.trim());
+      }
+    }
+  } catch (err) {
+    alert("Error al conectar: " + err + "\nAsegúrate de que el Monitor de Arduino esté CERRADO.");
+  }
+}
+
+async function enviarComando(cmd) {
+  if (!outputStream) return;
+  const encoder = new TextEncoder();
+  const writer = outputStream.getWriter();
+  await writer.write(encoder.encode(cmd + "\n"));
+  writer.releaseLock();
+}
+
+function toggleModo() {
+  modoInversion = !modoInversion;
+  const btn = document.getElementById("modo-btn");
+  if (modoInversion) {
+    enviarComando("INVERSION_ON");
+    btn.textContent = "Modo: INVERSIÓN (sin herencia)";
+    btn.className = "btn-inversion";
+  } else {
+    enviarComando("INVERSION_OFF");
+    btn.textContent = "Modo: NORMAL (con mutex)";
+    btn.className = "btn-normal";
+  }
+}
+
+// ── LÓGICA GRÁFICA DEL RADAR ORIGINAL ──
+const canvas = document.getElementById("radar");
+const ctx = canvas.getContext("2d");
+const CX = canvas.width / 2, CY = canvas.height / 2, R = canvas.width / 2 - 10;
+const puntos = [];
+let lineaAngulo = 0;
+
+function procesarDatos(jsonString) {
+  try {
+    const d = JSON.parse(jsonString);
+
+    if (d.tipo === "radar") {
+      lineaAngulo = d.angulo;
+      document.getElementById("dist-display").textContent = `${d.dist} cm`;
+      document.getElementById("dist-grande").textContent = `${d.dist} cm`;
+      document.getElementById("angulo-display").textContent = `Ángulo: ${d.angulo}°`;
+
+      // ── NUEVA LÓGICA DE ALARMA MP3 ──
+      const reproductorAudio = document.getElementById("alarma-mp3");
+      
+      // Zona Roja de Peligro: El objeto está a 20 cm o menos (y la distancia es válida > 0)
+      if (d.dist > 0 && d.dist <= 20) {
+        if (reproductorAudio.paused) {
+          reproductorAudio.play().catch(e => console.log("Permiso de audio pendiente:", e));
+        }
+      } else {
+        // Zona Verde y Amarilla: El objeto se aleja, detener música y reiniciar
+        if (!reproductorAudio.paused) {
+          reproductorAudio.pause();
+          reproductorAudio.currentTime = 0; 
+        }
+      }
+      // ────────────────────────────────
+
+      // Tu filtro inteligente exacto
+      if (d.dist > 2 && d.dist <= 100 && !(d.dist >= 34 && d.dist <= 37)) {
+        puntos.push({ angulo: d.angulo, dist: d.dist });
+        if (puntos.length > 80) puntos.shift();
+      }
+    }
+
+    if (d.tipo === "estado") {
+      const badgeClass = { "LIBRE": "libre", "TOMADO": "tomado", "ESPERANDO": "esperando", "TIMEOUT": "timeout" }[d.mutex] || "libre";
+      const tareaMap = { "TaskAlerta": ["badge-alerta", "note-alerta"], "TaskRadar": ["badge-radar", "note-radar"], "TaskCalib": ["badge-calib", "note-calib"], "TaskLogger": ["badge-logger", "note-logger"] };
+      
+      if (tareaMap[d.tarea]) {
+        const [bid, nid] = tareaMap[d.tarea];
+        const badge = document.getElementById(bid);
+        badge.textContent = d.mutex;
+        badge.className = `badge ${badgeClass}`;
+        document.getElementById(nid).textContent = d.nota;
+      }
+
+      const box = document.getElementById("log-box");
+      const line = document.createElement("div");
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${d.tarea}: ${d.nota}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+      if (box.children.length > 50) box.removeChild(box.firstChild);
+    }
+  } catch (e) {}
+}
+
+function dibujarRadar() {
+  ctx.fillStyle = "#0a0f0a";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#0f2a0f"; ctx.lineWidth = 1;
+  
+  [0.25, 0.5, 0.75, 1].forEach(r => {
+    ctx.beginPath(); ctx.arc(CX, CY, R * r, 0, Math.PI); ctx.stroke();
+    ctx.fillStyle = "#1a4a1a"; ctx.font = "10px monospace";
+    ctx.fillText(`${Math.round(r * 100)} cm`, CX + R * r + 2, CY - 3);
+  });
+
+  [0, 30, 60, 90, 120, 150, 180].forEach(a => {
+    const rad = (a * Math.PI) / 180;
+    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX - R * Math.cos(rad), CY - R * Math.sin(rad)); ctx.stroke();
+    ctx.fillText(`${a}°`, CX - (R + 16) * Math.cos(rad) - 10, CY - (R + 16) * Math.sin(rad) + 4);
+  });
+
+  puntos.forEach((p, i) => {
+    const alpha = (i + 1) / puntos.length;
+    const rad = (p.angulo * Math.PI) / 180;
+    const r = (p.dist / 100) * R;
+    ctx.fillStyle = `rgba(255, 68, 68, ${alpha * 0.8})`;
+    ctx.beginPath(); ctx.arc(CX - r * Math.cos(rad), CY - r * Math.sin(rad), 4, 0, Math.PI * 2); ctx.fill();
+  });
+
+  const radLinea = (lineaAngulo * Math.PI) / 180;
+  ctx.strokeStyle = "#00ff41"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX - R * Math.cos(radLinea), CY - R * Math.sin(radLinea)); ctx.stroke();
+
+  for (let i = 1; i <= 20; i++) {
+    const a = ((lineaAngulo - i) * Math.PI) / 180;
+    ctx.strokeStyle = `rgba(0,255,65,${(20 - i) / 20 * 0.15})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX - R * Math.cos(a), CY - R * Math.sin(a)); ctx.stroke();
+  }
+}
+setInterval(dibujarRadar, 40);
+</script>
+</body>
+</html>
