@@ -27,7 +27,6 @@ Aquí se puede ver cómo funciona el radar escaneando el área:
 Y en este otro video se ve la prueba de cómo reacciona el sistema de prioridades y cómo bloquea el servo cuando algo entra en la zona de peligro:
 
 <video src="video2.mp4" controls width="100%"></video>
-
 ---
 
 ## 🧠 ¿Cómo funciona el código? (FreeRTOS)
