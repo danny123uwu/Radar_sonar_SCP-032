@@ -22,14 +22,11 @@ Este es un proyecto de electrónica, que hice con compañeros para el curso de S
 
 Aquí se puede ver cómo funciona el radar escaneando el área:
 
-
-
-https://github.com/user-attachments/assets/a2d04862-e4c2-40b6-a241-3f74994c4d53
-
+https://github.com/user-attachments/assets/4e5ff150-e6bd-4a6f-a86d-fd09d555bf70
 
 Y en este otro video se ve la prueba de cómo reacciona el sistema de prioridades y cómo bloquea el servo cuando algo entra en la zona de peligro:
 
-https://github.com/user-attachments/assets/e00e73e2-d2ac-4fef-9a21-e4a80317db2a
+https://github.com/user-attachments/assets/d2c443ae-5800-42b5-af3c-484347308cd3
 
 ---
 
