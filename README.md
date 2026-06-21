@@ -4,16 +4,16 @@ Este es un proyecto de electrónica, que hice con compañeros para el curso de S
 
 ---
 
-1 Microcontrolador ESP32 (es el cerebro que corre todo el sistema de prioridades con FreeRTOS).
-1 Sensor Ultrasonido HC-SR04 (para medir las distancias y detectar los objetos).  
-1 Servomotor (SG90 o MG90S) (el motor que hace girar el sensor para el barrido del radar).
-1 Buzzer (para la alarma acústica cuando algo se acerca demasiado).
-3 LEDs de colores:1 LED Verde (indicador de zona libre).  
-1 LED Amarillo (indicador de advertencia).  
-1 LED Rojo (indicador de peligro crítico). 
-3 Resistencias (adecuadas para proteger tus LEDs, usualmente de 220 o 330 ohmios).
-1 Cable de datos USB (para alimentar el ESP32 y conectar el radar directo a la página web).  
-Protoboard y Cables Jumpers (para hacer todas las uniones de los pines limpiamente).
+- 1 Microcontrolador ESP32 (es el cerebro que corre todo el sistema de prioridades con FreeRTOS).
+- 1 Sensor Ultrasonido HC-SR04 (para medir las distancias y detectar los objetos).  
+- 1 Servomotor (SG90 o MG90S) (el motor que hace girar el sensor para el barrido del radar).
+- 1 Buzzer (para la alarma acústica cuando algo se acerca demasiado).
+- 3 LEDs de colores:1 LED Verde (indicador de zona libre).  
+- 1 LED Amarillo (indicador de advertencia).  
+- 1 LED Rojo (indicador de peligro crítico). 
+- 3 Resistencias (adecuadas para proteger tus LEDs, usually de 220 o 330 ohmios).
+- 1 Cable de datos USB (para alimentar el ESP32 y conectar el radar directo a la página web).  
+- Protoboard y Cables Jumpers (para hacer todas las uniones de los pines limpiamente).
 
 
 ---
@@ -42,10 +42,10 @@ Como este sistema usa un orden de prioridades, dividí el código en tareas inde
 * **`TaskCalib` (Prioridad 1):** Es una rutina de mantenimiento que se activa cada 40 segundos para calibrar el servo y comprobar que se mueva bien.
 
 ### 🔒 Candados para evitar errores (Mutexes)
-Para que las tareas no se estorben entre sí ni intenten usar el mismo componente al mismo tiempo, usé unos candados llamados **Mutexes**[cite: 2]:
-* **`mutex_servo`:** Evita que el radar y la calibración muevan el motor a la vez[cite: 2].
-* **`mutex_uart`:** Cuida que los mensajes JSON no se amontonen ni se rompan al mandarlos a la computadora[cite: 2].
-* **`mutex_sensor`:** Protege los pines del sensor ultrasónico para que la medición sea limpia[cite: 2].
+Para que las tareas no se estorben entre sí ni intenten usar el mismo componente al mismo tiempo, usé unos candados llamados **Mutexes**:
+* **`mutex_servo`:** Evita que el radar y la calibración muevan el motor a la vez.
+* **`mutex_uart`:** Cuida que los mensajes JSON no se amontonen ni se rompan al mandarlos a la computadora.
+* **`mutex_sensor`:** Protege los pines del sensor ultrasónico para que la medición sea limpia.
 
 ---
 
@@ -65,15 +65,15 @@ Para volver a armarlo o usarlo de base, estas son las conexiones en el ESP32:
 
 ## 💻 La Página Web (Interfaz Gráfica)
 
-El archivo `PAGINA_SONAR.html` es la interfaz web del proyecto[cite: 1]. Está hecha con HTML, CSS y JavaScript nativo[cite: 1].
-* **Conexión Directa:** Usa la tecnología *Web Serial API* para conectarse directamente al ESP32 por medio del cable USB, leyendo los datos sin necesidad de instalar programas raros o servidores intermedios en la computadora[cite: 1].
-* **Filtros y Audio:** La página limpia los ruidos de lectura (ignora errores de distancia)[cite: 1] y reproduce la alarma de fondo (`Music.mp3`) de manera automática cuando el radar detecta que un objeto se metió a la zona roja de peligro (a 20 cm o menos)[cite: 1].
+El archivo `PAGINA_SONAR.html` es la interfaz web del proyecto. Está hecha con HTML, CSS y JavaScript nativo.
+* **Conexión Directa:** Usa la tecnología *Web Serial API* para conectarse directamente al ESP32 por medio del cable USB, leyendo los datos sin necesidad de instalar programas raros o servidores intermedios en la computadora.
+* **Filtros y Audio:** La página limpia los ruidos de lectura (ignora errores de distancia) y reproduce la alarma de fondo (`Music.mp3`) de manera automática cuando el radar detecta que un objeto se metió a la zona roja de peligro (a 20 cm o menos).
 
 ---
 
 ## 🚀 Cómo ponerlo a correr
 
-1. Abre `Proyecto_final_funcio.ino` en el IDE de Arduino[cite: 1], instala la librería `ESP32Servo`[cite: 1] y sube el código al ESP32[cite: 1].
+1. Abre `Proyecto_final_funcio.ino` en el IDE de Arduino, instala la librería `ESP32Servo` y sube el código al ESP32.
 2. Conecta todos los componentes como dice la lista de arriba.
-3. Abre el archivo `PAGINA_SONAR.html` en tu navegador de preferencia[cite: 1].
-4. **Importante:** Asegúrate de cerrar el Monitor Serie del IDE de Arduino antes ya que aveces el proceso de la consola de este mismo crea cconflicto con la comunicacion de la pagina con el ESP32[cite: 1], dale al botón **🔌 CONECTAR AL ESP32 POR USB** en la página web[cite: 1] y selecciona el puerto donde está conectado tu circuito.
+3. Abre el archivo `PAGINA_SONAR.html` en tu navegador de preferencia.
+4. **Importante:** Asegúrate de cerrar el Monitor Serie del IDE de Arduino antes ya que aveces el proceso de la consola de este mismo crea cconflicto con la comunicacion de la pagina con el ESP32, dale al botón **🔌 CONECTAR AL ESP32 POR USB** en la página web y selecciona el puerto donde está conectado tu circuito.
